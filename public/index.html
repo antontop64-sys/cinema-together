@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Приватная комната для совместного просмотра вдвоём" />
+    <meta name="theme-color" content="#08090d" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2308090d'/%3E%3Cpath d='M9 10h14v12H9z' fill='%23f1f0eb'/%3E%3Cpath d='m14 13 6 3-6 3z' fill='%23ff5b4d'/%3E%3C/svg%3E" />
+    <title>Cinema Together</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell" id="setup-view">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Cinema Together, на главную">
+          <span class="brand-mark" aria-hidden="true"><span></span></span>
+          <span>Cinema Together</span>
+        </a>
+        <span class="privacy-note">Приватная комната · 2 человека</span>
+      </header>
+
+      <section class="setup" aria-labelledby="setup-title">
+        <div class="intro">
+          <h1 id="setup-title">Смотрите фильмы вместе</h1>
+          <p class="lead">Создайте комнату и отправьте ссылку. Экран и звук передаются напрямую между вами.</p>
+        </div>
+
+        <div class="setup-panel">
+          <p class="step-label">Режим просмотра</p>
+          <div class="mode-grid" role="radiogroup" aria-label="Режим комнаты">
+            <button class="mode-card is-selected" type="button" role="radio" aria-checked="true" data-mode="watch">
+              <span class="mode-copy"><strong>Смотреть вместе</strong><small>Экран и звук вкладки</small></span>
+              <span class="radio-dot" aria-hidden="true"></span>
+            </button>
+            <button class="mode-card" type="button" role="radio" aria-checked="false" data-mode="talk">
+              <span class="mode-copy"><strong>Смотреть и общаться</strong><small>Экран, звук и микрофоны</small></span>
+              <span class="radio-dot" aria-hidden="true"></span>
+            </button>
+          </div>
+
+          <div class="divider" aria-hidden="true"></div>
+
+          <div class="entry-grid">
+            <button id="create-room" class="primary-action" type="button">
+              <span>Создать комнату</span>
+            </button>
+            <form class="join-form" id="join-form">
+              <label for="room-code">Войти по коду</label>
+              <div class="join-row">
+                <input id="room-code" name="room" inputmode="text" autocomplete="off" maxlength="6" placeholder="КОД123" />
+                <button type="submit">Войти</button>
+              </div>
+            </form>
+          </div>
+          <p id="setup-error" class="form-error" role="alert" hidden></p>
+        </div>
+      </section>
+
+      <footer class="disclaimer">
+        <span class="info-mark" aria-hidden="true">i</span>
+        <p><strong>Важно:</strong> защищённое DRM-видео на некоторых стримингах может показывать чёрный экран. Это ограничение браузера.</p>
+      </footer>
+    </main>
+
+    <main class="room-shell" id="room-view" hidden>
+      <header class="room-topbar">
+        <a class="brand" href="/" aria-label="Cinema Together, на главную">
+          <span class="brand-mark" aria-hidden="true"><span></span></span>
+          <span>Cinema Together</span>
+        </a>
+        <div class="room-heading">
+          <span id="room-mode-label">Смотреть вместе</span>
+          <strong>Комната <span id="room-code-label">—</span></strong>
+        </div>
+        <div class="connection-badge" id="connection-badge" data-state="waiting">
+          <span aria-hidden="true"></span><strong>Ожидаем участника</strong>
+        </div>
+      </header>
+
+      <div class="room-layout">
+        <section class="cinema-stage" aria-label="Трансляция">
+          <video id="remote-video" autoplay playsinline></video>
+          <video id="local-preview" autoplay playsinline muted hidden></video>
+          <audio id="remote-audio" autoplay></audio>
+
+          <div class="stage-empty" id="stage-empty">
+            <span class="screen-glyph" aria-hidden="true"><i></i></span>
+            <h1 id="stage-title">Демонстрация не запущена</h1>
+            <p id="stage-copy">Пригласите второго участника и покажите экран.</p>
+          </div>
+
+          <div class="live-label" id="live-label" hidden><span></span> В эфире</div>
+
+          <div class="media-controls">
+            <button class="control primary-control" id="share-button" type="button">
+              <span class="control-icon" aria-hidden="true">▣</span>
+              <span>Показать экран</span>
+            </button>
+            <button class="control" id="mic-button" type="button" hidden aria-pressed="false">
+              <span class="control-icon" aria-hidden="true">○</span>
+              <span>Включить микрофон</span>
+            </button>
+            <button class="control danger-control" id="leave-button" type="button">
+              <span class="control-icon" aria-hidden="true">×</span>
+              <span>Выйти</span>
+            </button>
+          </div>
+        </section>
+
+        <aside class="room-sidebar">
+          <section class="invite-card">
+            <p class="sidebar-label">Приглашение</p>
+            <h2>Ссылка на комнату</h2>
+            <p>Отправьте её второму участнику. Комната рассчитана на двоих.</p>
+            <div class="invite-link">
+              <code id="invite-link">—</code>
+              <button id="copy-link" type="button">Копировать</button>
+            </div>
+          </section>
+
+          <section class="participants-card">
+            <p class="sidebar-label">В комнате · <span id="people-count">1/2</span></p>
+            <div class="participant-row">
+              <span class="avatar">В</span>
+              <span><strong>Вы</strong><small id="self-role">Организатор</small></span>
+              <span class="participant-state is-online">Онлайн</span>
+            </div>
+            <div class="participant-row" id="peer-row">
+              <span class="avatar is-muted">2</span>
+              <span><strong id="peer-name">Второй зритель</strong><small id="peer-detail">Ещё не вошёл</small></span>
+              <span class="participant-state" id="peer-state">Ожидание</span>
+            </div>
+          </section>
+
+          <section class="connection-card">
+            <p class="sidebar-label">Соединение</p>
+            <ol class="status-list" id="status-list">
+              <li class="is-complete">Комната создана</li>
+              <li id="status-peer">Ожидаем второго участника</li>
+              <li id="status-media">Трансляция ещё не запущена</li>
+            </ol>
+          </section>
+
+          <p class="sidebar-drm"><span aria-hidden="true">i</span> DRM-защищённое видео может не передаваться. Попробуйте другую вкладку или локальный файл.</p>
+        </aside>
+      </div>
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

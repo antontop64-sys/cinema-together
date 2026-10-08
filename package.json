@@ -1,0 +1,15 @@
+{
+  "name": "cinema-together",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MVP for private two-person WebRTC watch rooms",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
