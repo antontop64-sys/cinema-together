@@ -59,3 +59,21 @@ test("relays signaling events only to the other participant", async () => {
     assert.equal(host.data.events.some((event) => event.type === "signal"), false);
   });
 });
+
+test("reports whether the shared screen includes audio", async () => {
+  await withServer(async (base) => {
+    const created = await request(base, "/api/rooms", { mode: "watch", participantId: "host" });
+    const code = created.data.room.code;
+    await request(base, `/api/rooms/${code}`, { participantId: "guest" });
+    const updated = await request(base, `/api/rooms/${code}/state`, {
+      participantId: "host",
+      sharing: true,
+      sharingAudio: true,
+      micEnabled: false
+    });
+
+    const host = updated.data.room.participants.find((participant) => participant.role === "host");
+    assert.equal(host.sharing, true);
+    assert.equal(host.sharingAudio, true);
+  });
+});

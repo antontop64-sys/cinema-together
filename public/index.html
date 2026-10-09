@@ -91,10 +91,21 @@
 
           <div class="live-label" id="live-label" hidden><span></span> В эфире</div>
 
+          <div class="media-notice" id="media-notice" role="status" hidden></div>
+          <div class="share-audio-tip" id="share-audio-tip">Для звука выберите вкладку браузера и включите передачу аудио.</div>
+
           <div class="media-controls">
             <button class="control primary-control" id="share-button" type="button">
               <span class="control-icon" aria-hidden="true">▣</span>
               <span>Показать экран</span>
+            </button>
+            <button class="control" id="sound-button" type="button" hidden aria-pressed="false">
+              <span class="control-icon" aria-hidden="true">◖</span>
+              <span>Включить звук</span>
+            </button>
+            <button class="control" id="fullscreen-button" type="button" hidden disabled>
+              <span class="control-icon" aria-hidden="true">⛶</span>
+              <span>Во весь экран</span>
             </button>
             <button class="control" id="mic-button" type="button" hidden aria-pressed="false">
               <span class="control-icon" aria-hidden="true">○</span>

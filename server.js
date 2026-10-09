@@ -72,7 +72,7 @@ function roomSnapshot(room, participantId) {
     code: room.code,
     mode: room.mode,
     role: me?.role,
-    participants: [...room.participants.values()].map(({ role, sharing, micEnabled }) => ({ role, sharing, micEnabled })),
+    participants: [...room.participants.values()].map(({ role, sharing, sharingAudio, micEnabled }) => ({ role, sharing, sharingAudio, micEnabled })),
     sharing: [...room.participants.values()].some((participant) => participant.role === "host" && participant.sharing)
   };
 }
@@ -114,6 +114,7 @@ async function handleApi(request, response, url) {
       role: "host",
       lastSeen: Date.now(),
       sharing: false,
+      sharingAudio: false,
       micEnabled: false
     });
     rooms.set(code, room);
@@ -141,7 +142,7 @@ async function handleApi(request, response, url) {
         json(response, 409, { error: "В комнате уже два человека" });
         return true;
       }
-      participant = { id: body.participantId, role: "guest", lastSeen: Date.now(), sharing: false, micEnabled: false };
+      participant = { id: body.participantId, role: "guest", lastSeen: Date.now(), sharing: false, sharingAudio: false, micEnabled: false };
       room.participants.set(body.participantId, participant);
       pushEvent(room, "peer-joined", { role: "guest" }, body.participantId);
     } else {
@@ -191,8 +192,9 @@ async function handleApi(request, response, url) {
     }
     participant.lastSeen = Date.now();
     participant.sharing = Boolean(body.sharing);
+    participant.sharingAudio = participant.sharing && Boolean(body.sharingAudio);
     participant.micEnabled = Boolean(body.micEnabled);
-    pushEvent(room, "peer-state", { role: participant.role, sharing: participant.sharing, micEnabled: participant.micEnabled }, body.participantId);
+    pushEvent(room, "peer-state", { role: participant.role, sharing: participant.sharing, sharingAudio: participant.sharingAudio, micEnabled: participant.micEnabled }, body.participantId);
     json(response, 200, { room: roomSnapshot(room, body.participantId) });
     return true;
   }

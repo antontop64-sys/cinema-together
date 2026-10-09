@@ -11,6 +11,10 @@ const remoteAudio = $("#remote-audio");
 const localPreview = $("#local-preview");
 const shareButton = $("#share-button");
 const micButton = $("#mic-button");
+const soundButton = $("#sound-button");
+const fullscreenButton = $("#fullscreen-button");
+const mediaNotice = $("#media-notice");
+const shareAudioTip = $("#share-audio-tip");
 const leaveButton = $("#leave-button");
 
 let selectedMode = "watch";
@@ -43,12 +47,17 @@ function setSetupError(message = "") {
   setupError.hidden = !message;
 }
 
-function showToast(message) {
+function showToast(message, duration = 2400) {
   const toast = $("#toast");
   toast.textContent = message;
   toast.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.hidden = true; }, 2400);
+  toastTimer = setTimeout(() => { toast.hidden = true; }, duration);
+}
+
+function showMediaNotice(message = "") {
+  mediaNotice.textContent = message;
+  mediaNotice.hidden = !message;
 }
 
 function setConnection(text, state = "waiting") {
@@ -127,6 +136,7 @@ async function joinRoom(code) {
 function enterRoom(nextRoom) {
   room = nextRoom;
   role = nextRoom.role;
+  roomView.dataset.role = role;
   lastEventId = 0;
   setupView.hidden = true;
   roomView.hidden = false;
@@ -135,6 +145,10 @@ function enterRoom(nextRoom) {
   $("#self-role").textContent = role === "host" ? "Организатор" : "Гость";
   micButton.hidden = room.mode !== "talk";
   shareButton.hidden = role !== "host";
+  shareAudioTip.hidden = role !== "host";
+  soundButton.hidden = true;
+  fullscreenButton.hidden = true;
+  fullscreenButton.disabled = true;
   $("#status-list").firstElementChild.textContent = role === "host" ? "Комната создана" : "Вы вошли в комнату";
   const invite = `${location.origin}${location.pathname}?room=${room.code}`;
   $("#invite-link").textContent = invite.replace(/^https?:\/\//, "");
@@ -148,6 +162,7 @@ function enterRoom(nextRoom) {
 
 function updateRoomState(snapshot) {
   const peerPresent = snapshot.participants.length > 1;
+  const hostState = snapshot.participants.find((participant) => participant.role === "host");
   $("#people-count").textContent = `${snapshot.participants.length}/2`;
   $("#peer-row").querySelector(".avatar").classList.toggle("is-muted", !peerPresent);
   $("#peer-detail").textContent = peerPresent ? (role === "host" ? "Гость" : "Организатор") : "Ещё не вошёл";
@@ -157,6 +172,12 @@ function updateRoomState(snapshot) {
   $("#status-peer").className = peerPresent ? "is-complete" : "is-active";
   $("#status-media").textContent = snapshot.sharing ? "Трансляция запущена" : "Трансляция ещё не запущена";
   $("#status-media").className = snapshot.sharing ? "is-complete" : "";
+
+  if (role === "guest" && snapshot.sharing && hostState?.sharingAudio === false) {
+    showMediaNotice("Трансляция идёт без звука. Организатору нужно заново показать вкладку и включить передачу аудио.");
+  } else if (role === "guest" && !snapshot.sharing) {
+    showMediaNotice();
+  }
 
   if (!peerPresent) {
     setConnection("Ожидаем участника", "waiting");
@@ -203,6 +224,7 @@ async function sendState() {
     body: JSON.stringify({
       participantId,
       sharing: Boolean(screenStream),
+      sharingAudio: Boolean(screenStream?.getAudioTracks().length),
       micEnabled: Boolean(micStream?.getAudioTracks().some((track) => track.enabled))
     })
   });
@@ -249,10 +271,19 @@ function ensurePeer() {
     if (!remoteStream.getTracks().some((item) => item.id === track.id)) remoteStream.addTrack(track);
     if (role === "guest") {
       remoteVideo.srcObject = remoteStream;
+      remoteVideo.muted = false;
+      remoteVideo.volume = 1;
       if (track.kind === "video") {
         remoteVideo.dataset.active = "true";
+        remoteVideo.controls = true;
         $("#stage-empty").hidden = true;
         $("#live-label").hidden = false;
+        fullscreenButton.hidden = false;
+        fullscreenButton.disabled = false;
+      }
+      if (track.kind === "audio") {
+        soundButton.hidden = false;
+        attemptRemotePlayback(true);
       }
     } else {
       remoteAudio.srcObject = remoteStream;
@@ -322,13 +353,28 @@ async function handleSignal(signal) {
 shareButton.addEventListener("click", async () => {
   if (screenStream) return stopSharing();
   try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+    screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 30 },
+      audio: { suppressLocalAudioPlayback: false },
+      systemAudio: "include",
+      windowAudio: "system",
+      surfaceSwitching: "include",
+      selfBrowserSurface: "exclude"
+    });
     localPreview.srcObject = screenStream;
     localPreview.hidden = false;
     shareButton.classList.add("is-live");
     shareButton.querySelector("span:last-child").textContent = "Остановить показ";
     $("#live-label").hidden = false;
-    setStage("Экран показывается", "Второй участник видит выбранную вкладку или окно.");
+    const hasShareAudio = screenStream.getAudioTracks().length > 0;
+    setStage(
+      "Экран показывается",
+      hasShareAudio ? "Видео и звук передаются второму участнику." : "Видео передаётся без звука. Для звука выберите вкладку браузера и включите передачу аудио."
+    );
+    shareAudioTip.hidden = true;
+    if (!hasShareAudio) {
+      showToast("Звук не захвачен. Остановите показ, выберите вкладку браузера и включите передачу аудио.", 6500);
+    }
     for (const track of screenStream.getTracks()) {
       ensurePeer().addTrack(track, screenStream);
       track.addEventListener("ended", stopSharing, { once: true });
@@ -353,6 +399,7 @@ async function stopSharing() {
   localPreview.hidden = true;
   shareButton.classList.remove("is-live");
   shareButton.querySelector("span:last-child").textContent = "Показать экран";
+  shareAudioTip.hidden = role !== "host";
   $("#live-label").hidden = true;
   setStage("Показ остановлен", "Можно выбрать другой экран или вкладку и продолжить.");
   await sendState().catch(() => {});
@@ -385,6 +432,84 @@ function setMicUi(enabled) {
   micButton.querySelector(".control-icon").textContent = enabled ? "●" : "○";
 }
 
+async function attemptRemotePlayback(fromAutoplay = false) {
+  if (role !== "guest" || !remoteVideo.srcObject) return false;
+  remoteVideo.muted = false;
+  remoteVideo.volume = 1;
+  try {
+    await remoteVideo.play();
+    if (remoteStream.getAudioTracks().length) {
+      setSoundUi(true);
+      showMediaNotice();
+    }
+    return true;
+  } catch {
+    if (remoteStream.getAudioTracks().length) {
+      soundButton.hidden = false;
+      setSoundUi(false);
+      if (fromAutoplay) showMediaNotice("Нажмите «Включить звук» — мобильный браузер заблокировал автоматическое воспроизведение.");
+    }
+    return false;
+  }
+}
+
+function setSoundUi(enabled) {
+  soundButton.hidden = false;
+  soundButton.setAttribute("aria-pressed", String(enabled));
+  soundButton.querySelector("span:last-child").textContent = enabled ? "Выключить звук" : "Включить звук";
+  soundButton.querySelector(".control-icon").textContent = enabled ? "◖" : "◗";
+}
+
+soundButton.addEventListener("click", async () => {
+  const enabled = soundButton.getAttribute("aria-pressed") === "true";
+  if (enabled) {
+    remoteVideo.muted = true;
+    setSoundUi(false);
+    return;
+  }
+  await attemptRemotePlayback(false);
+});
+
+async function openFullscreen() {
+  if (role !== "guest" || remoteVideo.dataset.active !== "true") {
+    showToast("Сначала дождитесь трансляции");
+    return;
+  }
+
+  remoteVideo.muted = false;
+  const playPromise = remoteVideo.play();
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else if (remoteVideo.requestFullscreen) {
+      await remoteVideo.requestFullscreen({ navigationUI: "hide" });
+    } else if (remoteVideo.webkitEnterFullscreen) {
+      remoteVideo.webkitEnterFullscreen();
+    } else if (remoteVideo.webkitRequestFullscreen) {
+      await remoteVideo.webkitRequestFullscreen();
+    } else {
+      throw new Error("unsupported");
+    }
+    await playPromise.catch(() => {});
+    if (remoteStream.getAudioTracks().length) setSoundUi(true);
+  } catch {
+    await playPromise.catch(() => {});
+    showToast("Полноэкранный режим не поддерживается этим браузером");
+  }
+}
+
+fullscreenButton.addEventListener("click", openFullscreen);
+remoteVideo.addEventListener("dblclick", openFullscreen);
+document.addEventListener("fullscreenchange", () => {
+  fullscreenButton.querySelector("span:last-child").textContent = document.fullscreenElement ? "Выйти из полного экрана" : "Во весь экран";
+});
+remoteVideo.addEventListener("webkitbeginfullscreen", () => {
+  fullscreenButton.querySelector("span:last-child").textContent = "Выйти из полного экрана";
+});
+remoteVideo.addEventListener("webkitendfullscreen", () => {
+  fullscreenButton.querySelector("span:last-child").textContent = "Во весь экран";
+});
+
 $("#copy-link").addEventListener("click", async (event) => {
   try {
     await navigator.clipboard.writeText(event.currentTarget.dataset.link);
@@ -413,6 +538,12 @@ async function leaveRoom() {
   participantId = crypto.randomUUID();
   remoteVideo.srcObject = null;
   remoteVideo.removeAttribute("data-active");
+  remoteVideo.controls = false;
+  remoteVideo.muted = false;
+  soundButton.hidden = true;
+  fullscreenButton.hidden = true;
+  fullscreenButton.disabled = true;
+  showMediaNotice();
   roomView.hidden = true;
   setupView.hidden = false;
   history.replaceState({}, "", location.pathname);
@@ -427,6 +558,11 @@ function closePeer() {
   remoteVideo.srcObject = null;
   remoteAudio.srcObject = null;
   remoteVideo.removeAttribute("data-active");
+  remoteVideo.controls = false;
+  soundButton.hidden = true;
+  fullscreenButton.hidden = true;
+  fullscreenButton.disabled = true;
+  showMediaNotice();
   $("#stage-empty").hidden = false;
   if (role === "guest") setStage("Ждём трансляцию", "Организатор запустит показ экрана, когда будет готов.");
 }
